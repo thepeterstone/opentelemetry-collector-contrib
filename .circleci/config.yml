@@ -11,8 +11,8 @@ parameters:
     type: string
     default: ""
 
-orbs:
-  win: circleci/windows@2.4.0
+#orbs:
+#  win: circleci/windows@2.4.0
 
 executors:
   golang:
@@ -28,15 +28,13 @@ commands:
       files:
         type: string
         default: |
-            bin/otelcontribcol_darwin_amd64
-            bin/otelcontribcol_linux_arm64
-            bin/otelcontribcol_linux_amd64
-            bin/otelcontribcol_windows_amd64.exe
-            dist/otel-contrib-collector-*.arm64.rpm
-            dist/otel-contrib-collector_*_amd64.deb
-            dist/otel-contrib-collector-*.x86_64.rpm
-            dist/otel-contrib-collector_*_arm64.deb
-            dist/otel-contrib-collector-*amd64.msi
+          bin/otelcontribcol_darwin_amd64
+          bin/otelcontribcol_linux_arm64
+          bin/otelcontribcol_linux_amd64
+          dist/otel-contrib-collector-*.arm64.rpm
+          dist/otel-contrib-collector_*_amd64.deb
+          dist/otel-contrib-collector-*.x86_64.rpm
+          dist/otel-contrib-collector_*_arm64.deb
     steps:
       - run:
           name: Check if files exist
@@ -132,58 +130,52 @@ commands:
             make docker-otelcontribcol
             docker tag otelcontribcol:latest otel/<< parameters.repo >>:<< parameters.tag >>
             docker tag otelcontribcol:latest otel/<< parameters.repo >>:latest
-      - run:
-          name: Login to Docker Hub
-          command: docker login -u $DOCKER_HUB_USERNAME -p $DOCKER_HUB_PASSWORD
-      - run:
-          name: Push image
-          command: |
-            docker push otel/<< parameters.repo >>:<< parameters.tag >>
-            docker push otel/<< parameters.repo >>:latest
+      # - run:
+      #     name: Login to Docker Hub
+      #     command: docker login -u $DOCKER_HUB_USERNAME -p $DOCKER_HUB_PASSWORD
+      # - run:
+      #     name: Push image
+      #     command: |
+      #       docker push otel/<< parameters.repo >>:<< parameters.tag >>
+      #       docker push otel/<< parameters.repo >>:latest
 
-  github_issue_generator:
-    steps:
-      - when:
-          condition:
-            equal: [main, << pipeline.git.branch >>]
-          steps:
-            - run:
-                name: Generate GitHub Issue
-                command: issuegenerator ${TEST_RESULTS}
-                when: on_fail
+  # github_issue_generator:
+  #   steps:
+  #     - when:
+  #         condition:
+  #           equal: [main, << pipeline.git.branch >>]
+  #         steps:
+  #           - run:
+  #               name: Generate GitHub Issue
+  #               command: issuegenerator ${TEST_RESULTS}
+  #               when: on_fail
 
 workflows:
   version: 2
-  stability-tests:
-    when: << pipeline.parameters.run-stability-tests >>
-    jobs:
-      - checkout-commit
-      - setup:
-          requires:
-            - checkout-commit
-      - cross-compile:
-          requires:
-            - setup
-      - run-stability-tests:
-          context:
-            - github-release-and-issues-api-token
-          requires:
-            - cross-compile 
-      - publish-dev:
-          context:
-            - dockerhub-token
-          requires:
-            - run-stability-tests
+  # stability-tests:
+  #   when: << pipeline.parameters.run-stability-tests >>
+  #   jobs:
+  #     - checkout-commit
+  #     - setup:
+  #         requires:
+  #           - checkout-commit
+  #     - cross-compile:
+  #         requires:
+  #           - setup
+  #     - run-stability-tests:
+  #         requires:
+  #           - cross-compile
+  #     - publish-dev:
+  #         requires:
+  #           - run-stability-tests
 
   build-publish:
     when: << pipeline.parameters.run-build-publish >>
     jobs:
-      - windows-test:
-          context:
-            - github-release-and-issues-api-token
-          filters:
-            tags:
-              only: /^v[0-9]+\.[0-9]+\.[0-9]+.*/
+      #      - windows-test:
+      #          filters:
+      #            tags:
+      #              only: /^v[0-9]+\.[0-9]+\.[0-9]+.*/
       - setup:
           filters:
             tags:
@@ -206,69 +198,64 @@ workflows:
           filters:
             tags:
               only: /^v[0-9]+\.[0-9]+\.[0-9]+.*/
-      - loadtest:
-          context:
-            - github-release-and-issues-api-token
-          requires:
-            - cross-compile 
-          filters:
-            tags:
-              only: /^v[0-9]+\.[0-9]+\.[0-9]+.*/
+      #      - loadtest:
+      #          requires:
+      #            - cross-compile
+      #          filters:
+      #            tags:
+      #              only: /^v[0-9]+\.[0-9]+\.[0-9]+.*/
       - unit-tests:
           requires:
             - setup
           filters:
             tags:
               only: /^v[0-9]+\.[0-9]+\.[0-9]+.*/
-      - windows-msi:
-          requires:
-            - cross-compile
-          filters:
-            tags:
-              only: /^v[0-9]+\.[0-9]+\.[0-9]+.*/
+      # - windows-msi:
+      #     requires:
+      #       - cross-compile
+      #     filters:
+      #       tags:
+      #         only: /^v[0-9]+\.[0-9]+\.[0-9]+.*/
       - publish-check:
           requires:
             - lint
             - unit-tests
             - integration-tests
             - cross-compile
-            - loadtest
-            - windows-test
-            - windows-msi
+            #            - loadtest
+            #            - windows-test
+            # - windows-msi
             - deb-package
             - rpm-package
-      - publish-stable:
-          context:
-            - github-release-and-issues-api-token
-            - dockerhub-token
-          requires:
-            - lint
-            - unit-tests
-            - integration-tests
-            - cross-compile
-            - loadtest
-            - windows-test
-            - windows-msi
-            - deb-package
-            - rpm-package
-          filters:
-            branches:
-              ignore: /.*/
-            tags:
-              only: /^v[0-9]+\.[0-9]+\.[0-9]+.*/
-      - spawn-stability-tests-job:
-          requires:
-            - lint
-            - unit-tests
-            - loadtest
-            - windows-test
-            - integration-tests
-            - cross-compile
-          filters:
-            branches:
-              only: /main|release\/.+/
-            tags:
-              ignore: /.*/
+      # - publish-stable:
+      #     requires:
+      #       - lint
+      #       - unit-tests
+      #       - integration-tests
+      #       - cross-compile
+      #       - loadtest
+      #       - windows-test
+      #       - windows-msi
+      #       - deb-package
+      #       - rpm-package
+      #     filters:
+      #       branches:
+      #         ignore: /.*/
+      #       tags:
+      #         only: /^v[0-9]+\.[0-9]+\.[0-9]+.*/
+      # - spawn-stability-tests-job:
+      #     requires:
+      #       - lint
+      #       - unit-tests
+      #       - loadtest
+      #       - windows-test
+      #       - integration-tests
+      #       - cross-compile
+      #     filters:
+      #       branches:
+      #         only: /main|release\/.+/
+      #       tags:
+      #         ignore: /.*/
       - integration-tests:
           filters:
             tags:
@@ -348,70 +335,70 @@ jobs:
       - run:
           name: Unit test coverage
           command: make unit-tests-with-cover
-# DISABLE CODECOV UNTIL THE SCRIPT IS AUDITED AND WE ARE CERTAIN IT IS OK TO TO EXECUTE IT.
-#      - run:
-#          name: Upload unit test coverage
-#          command: bash <(curl -s https://codecov.io/bash) -F unit
+  # DISABLE CODECOV UNTIL THE SCRIPT IS AUDITED AND WE ARE CERTAIN IT IS OK TO TO EXECUTE IT.
+  #      - run:
+  #          name: Upload unit test coverage
+  #          command: bash <(curl -s https://codecov.io/bash) -F unit
 
-  loadtest:
-    executor: golang
-    resource_class: medium+
-    environment:
-      TEST_RESULTS: testbed/tests/results/junit/results.xml
-    steps:
-      - restore_workspace
-      - install_fluentbit
-      - run:
-          name: Loadtest
-          command: make e2e-test
-      - store_artifacts:
-          path: testbed/tests/results
-      - store_test_results:
-          path: testbed/tests/results/junit
-      - github_issue_generator
+  #  loadtest:
+  #    executor: golang
+  #    resource_class: medium+
+  #    environment:
+  #      TEST_RESULTS: testbed/tests/results/junit/results.xml
+  #    steps:
+  #      - restore_workspace
+  #      - install_fluentbit
+  #      - run:
+  #          name: Loadtest
+  #          command: make e2e-test
+  #      - store_artifacts:
+  #          path: testbed/tests/results
+  #      - store_test_results:
+  #          path: testbed/tests/results/junit
+  #      - github_issue_generator
 
-  windows-test:
-    executor:
-      name: win/default
-      shell: powershell.exe
-    environment:
-      GOPATH=~/go
-    steps:
-      - checkout
-      - restore_module_cache
-      - run:
-          name: Upgrade golang
-          command: |
-            choco upgrade golang --version=1.15
-            refreshenv
-      - run:
-          name: Unit tests
-          command: (Get-Childitem -Include go.mod -Recurse) | ForEach-Object { cd (Split-Path $_ -Parent); go test ./...; if ($LastExitCode -gt 0) { exit $LastExitCode } }
-      - save_module_cache
-      - github_issue_generator
+  #  windows-test:
+  #    executor:
+  #      name: win/default
+  #      shell: powershell.exe
+  #    environment:
+  #      GOPATH=~/go
+  #    steps:
+  #      - checkout
+  #      - restore_module_cache
+  #      - run:
+  #          name: Upgrade golang
+  #          command: |
+  #            choco upgrade golang --version=1.15
+  #            refreshenv
+  #      - run:
+  #          name: Unit tests
+  #          command: (Get-Childitem -Include go.mod -Recurse) | ForEach-Object { cd (Split-Path $_ -Parent); go test ./...; if ($LastExitCode -gt 0) { exit $LastExitCode } }
+  #      - save_module_cache
+  #      - github_issue_generator
 
-  windows-msi:
-    executor:
-      name: win/default
-      shell: powershell.exe
-    steps:
-      - attach_to_workspace
-      - run:
-          command: mkdir -p dist
-      - run:
-          name: Install Wix Toolset
-          command: .\internal\buildscripts\packaging\msi\make.ps1 Install-Tools
-      - run:
-          name: Build MSI
-          command: |
-            $Version = if ($env:CIRCLE_TAG -match '^v(\d+\.\d+\.\d+)') { $Matches[1] } else { "0.0.1" }
-            .\internal\buildscripts\packaging\msi\make.ps1 New-MSI -Version $Version
-      - run:
-          name: Validate MSI
-          command: .\internal\buildscripts\packaging\msi\make.ps1 Confirm-MSI
-      - persist_to_workspace:
-          root: ~/
-          paths: project/dist/*.msi
+  # windows-msi:
+  #   executor:
+  #     name: win/default
+  #     shell: powershell.exe
+  #   steps:
+  #     - attach_to_workspace
+  #     - run:
+  #         command: mkdir -p dist
+  #     - run:
+  #         name: Install Wix Toolset
+  #         command: .\internal\buildscripts\packaging\msi\make.ps1 Install-Tools
+  #     - run:
+  #         name: Build MSI
+  #         command: |
+  #           $Version = if ($env:CIRCLE_TAG -match '^v(\d+\.\d+\.\d+)') { $Matches[1] } else { "0.0.1" }
+  #           .\internal\buildscripts\packaging\msi\make.ps1 New-MSI -Version $Version
+  #     - run:
+  #         name: Validate MSI
+  #         command: .\internal\buildscripts\packaging\msi\make.ps1 Confirm-MSI
+  #     - persist_to_workspace:
+  #         root: ~/
+  #         paths: project/dist/*.msi
 
   publish-check:
     docker:
@@ -420,6 +407,8 @@ jobs:
       - attach_to_workspace
       - setup_remote_docker
       - verify_dist_files_exist
+      - store_artifacts:
+          path: bin/
       - run:
           name: Check passed
           command: echo "publish check passed meaning release CI jobs should work as expected"
@@ -429,52 +418,52 @@ jobs:
           command: echo "publish check failed. This means release CI jobs will likely fail as well"
           when: on_fail
 
-  publish-stable:
-    docker:
-      - image: cimg/go:1.15
-    steps:
-      - restore_workspace
-      - verify_dist_files_exist
-      - setup_remote_docker
-      - publish_docker_images:
-          repo: opentelemetry-collector-contrib
-          tag: ${CIRCLE_TAG:1}
-      - run:
-          name: Prepare release artifacts
-          command: |
-            cp bin/* dist/
-      - run:
-          name: Calculate checksums
-          command: cd dist && shasum -a 256 * > checksums.txt
-      - run:
-          name: Create Github release and upload artifacts
-          command: ghr -t $GITHUB_TOKEN -u $CIRCLE_PROJECT_USERNAME -r $CIRCLE_PROJECT_REPONAME --replace $CIRCLE_TAG dist/
+  # publish-stable:
+  #   docker:
+  #     - image: cimg/go:1.15
+  #   steps:
+  #     - restore_workspace
+  #     - verify_dist_files_exist
+  #     - setup_remote_docker
+  #     - publish_docker_images:
+  #         repo: opentelemetry-collector-contrib
+  #         tag: ${CIRCLE_TAG:1}
+  #     - run:
+  #         name: Prepare release artifacts
+  #         command: |
+  #           cp bin/* dist/
+  #     - run:
+  #         name: Calculate checksums
+  #         command: cd dist && shasum -a 256 * > checksums.txt
+  #     - run:
+  #         name: Create Github release and upload artifacts
+  #         command: ghr -t $GITHUB_TOKEN -u $CIRCLE_PROJECT_USERNAME -r $CIRCLE_PROJECT_REPONAME --replace $CIRCLE_TAG dist/
 
-  publish-dev:
-    executor: golang
-    steps:
-      - restore_workspace
-      - verify_dist_files_exist:
-          files: |
-            bin/otelcontribcol_darwin_amd64
-            bin/otelcontribcol_linux_arm64
-            bin/otelcontribcol_linux_amd64
-            bin/otelcontribcol_windows_amd64.exe
-      - setup_remote_docker
-      - publish_docker_images:
-          repo: opentelemetry-collector-contrib-dev
-          tag: ${CIRCLE_SHA1}
+  # publish-dev:
+  #   executor: golang
+  #   steps:
+  #     - restore_workspace
+  #     - verify_dist_files_exist:
+  #         files: |
+  #           bin/otelcontribcol_darwin_amd64
+  #           bin/otelcontribcol_linux_arm64
+  #           bin/otelcontribcol_linux_amd64
+  #           bin/otelcontribcol_windows_amd64.exe
+  #     - setup_remote_docker
+  #     - publish_docker_images:
+  #         repo: opentelemetry-collector-contrib-dev
+  #         tag: ${CIRCLE_SHA1}
 
-  spawn-stability-tests-job:
-    executor: golang
-    steps:
-      - run:
-          name: Trigger stability tests job
-          command: |
-            curl -f -X POST "https://circleci.com/api/v2/project/github/open-telemetry/${CIRCLE_PROJECT_REPONAME}/pipeline?circle-token=${CIRCLE_API_TOKEN}" \
-                -H 'Content-Type: application/json' \
-                -H 'Accept: application/json' \
-                -d '{"parameters": {"run-build-publish": false, "run-stability-tests": true, "collector-sha": "'"${CIRCLE_SHA1}"'"}, "branch": "'"${CIRCLE_BRANCH}"'"}'
+  # spawn-stability-tests-job:
+  #   executor: golang
+  #   steps:
+  #     - run:
+  #         name: Trigger stability tests job
+  #         command: |
+  #           curl -f -X POST "https://circleci.com/api/v2/project/github/open-telemetry/${CIRCLE_PROJECT_REPONAME}/pipeline?circle-token=${CIRCLE_API_TOKEN}" \
+  #               -H 'Content-Type: application/json' \
+  #               -H 'Accept: application/json' \
+  #               -d '{"parameters": {"run-build-publish": false, "run-stability-tests": true, "collector-sha": "'"${CIRCLE_SHA1}"'"}, "branch": "'"${CIRCLE_BRANCH}"'"}'
 
   checkout-commit:
     executor: golang
@@ -491,7 +480,7 @@ jobs:
       # Number of runners must be always in sync with number of stability tests,
       # so every node runs exactly one stability test.
       runners-number:
-        type: integer 
+        type: integer
         default: 9
     executor: golang
     resource_class: medium+
@@ -531,10 +520,10 @@ jobs:
             mkdir -p test-results/junit
             trap "go-junit-report -set-exit-code < test-results/go-integration-tests.out > test-results/junit/results.xml" EXIT
             make integration-tests-with-cover | tee test-results/go-integration-tests.out
-# DISABLE CODECOV UNTIL THE SCRIPT IS AUDITED AND WE ARE CERTAIN IT IS OK TO TO EXECUTE IT.
-#      - run:
-#          name: Upload integration test coverage
-#          command: bash <(curl -s https://codecov.io/bash) -F integration
+      # DISABLE CODECOV UNTIL THE SCRIPT IS AUDITED AND WE ARE CERTAIN IT IS OK TO TO EXECUTE IT.
+      #      - run:
+      #          name: Upload integration test coverage
+      #          command: bash <(curl -s https://codecov.io/bash) -F integration
       - store_test_results:
           path: test-results/junit
       - store_artifacts:
